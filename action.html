@@ -6,88 +6,111 @@
   <title>CalmGuard Action Relay</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 40px 20px; text-align: center; }
-    .card { background: white; padding: 30px; border-radius: 10px; max-width: 450px; margin: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    h2 { margin-top: 0; }
-    .btn { display: inline-block; margin-top: 20px; background: #2C3E50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }
+    .card { background: white; padding: 30px; border-radius: 10px; max-width: 550px; margin: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: left; }
+    h2 { margin-top: 0; text-align: center; color: #2C3E50; }
+    .btn { display: inline-block; margin-top: 15px; padding: 10px 18px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; color: white; border: none; cursor: pointer; }
+    .btn-green { background: #2ECC71; }
+    .btn-red { background: #E74C3C; }
+    .btn-dark { background: #2C3E50; }
+    .quarantine-item { background: #fafafa; border-left: 4px solid #E74C3C; padding: 12px; margin-bottom: 12px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div id="statusIcon">⏳</div>
-    <h2 id="statusTitle">Processing Action...</h2>
-    <p id="statusMsg" style="color: #555; line-height: 1.5;">Please wait while CalmGuard securely updates your inbox and audit log.</p>
-    <a href="sandbox.html" class="btn" style="display:none;" id="backBtn">Go to Sandbox</a>
+    <div id="content" style="text-align: center;">
+      <h2>⏳ Loading CalmGuard Action...</h2>
+    </div>
   </div>
 
   <script>
     // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE:
     const GAS_URL = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_DEPLOYMENT_ID/exec";
 
-    async function executeDiscordAction() {
-      const params = new URLSearchParams(window.location.search);
-      const action = params.get("action");
-      const threadId = params.get("threadId");
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action") || "view_quarantine";
+    const threadId = params.get("threadId") || "";
 
+    function getAdminSecret() {
       let secret = localStorage.getItem("calmguard_admin_token");
       if (!secret) {
-        secret = prompt("🔒 Enter your CalmGuard ADMIN_SECRET to authorize this action:");
+        secret = prompt("🔒 Enter your CalmGuard ADMIN_SECRET to authorize this security action:");
         if (secret) {
           localStorage.setItem("calmguard_admin_token", secret.trim());
-        } else {
-          document.getElementById("statusIcon").textContent = "🔒";
-          document.getElementById("statusTitle").textContent = "Unauthorized";
-          document.getElementById("statusMsg").textContent = "Security token is required to execute security actions.";
-          return;
         }
       }
+      return secret ? secret.trim() : "";
+    }
 
-      if (!action || !threadId) {
-        document.getElementById("statusIcon").textContent = "❌";
-        document.getElementById("statusTitle").textContent = "Invalid Request";
-        document.getElementById("statusMsg").textContent = "Missing action parameters.";
+    async function handleAction() {
+      const token = getAdminSecret();
+      if (!token) {
+        document.getElementById("content").innerHTML = `<h2>🔒 Unauthorized</h2><p>Security token is required.</p>`;
         return;
       }
 
-      try {
-        const payload = {
-          token: secret.trim(),
-          type: "discord_action",
-          action: action,
-          threadId: threadId
-        };
+      const box = document.getElementById("content");
 
-        const res = await fetch(GAS_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-
-        if (data.status === "unauthorized") {
-          localStorage.removeItem("calmguard_admin_token");
-          alert("Invalid Admin Secret. Please reload and re-enter.");
-          return;
+      // If viewing quarantine list, fetch it via standard form or JSON if possible, 
+      // but for actions (False Positive / Verify Scam), we use a hidden auto-submitting HTML form 
+      // to completely bypass browser CORS restrictions!
+      if (action === "view_quarantine") {
+        box.innerHTML = `<h2>📂 Active Quarantine</h2><p>Fetching quarantined items...</p>`;
+        try {
+          const res = await fetch(`${GAS_URL}?format=json&action=view_quarantine&token=${encodeURIComponent(token)}`, {
+            method: "GET",
+            credentials: "omit"
+          });
+          const data = await res.json();
+          if (data.status === "unauthorized") {
+            localStorage.removeItem("calmguard_admin_token");
+            alert("Invalid token. Reload page.");
+            return;
+          }
+          if (!data.items || data.items.length === 0) {
+            box.innerHTML = `<h2>📂 Active Quarantine</h2><p>No emails currently in quarantine!</p>`;
+            return;
+          }
+          box.innerHTML = `<h2>📂 Active Quarantine</h2>` + data.items.map(item => `
+            <div class="quarantine-item">
+              <h4 style="margin:0 0 5px 0;">${item.subject}</h4>
+              <p style="margin:0 0 5px 0; font-size:12px; color:#666;"><b>Sender:</b> ${item.sender}</p>
+              <form action="${GAS_URL}" method="POST" style="display:inline;">
+                <input type="hidden" name="token" value="${token}">
+                <input type="hidden" name="type" value="discord_action">
+                <input type="hidden" name="action" value="false_positive">
+                <input type="hidden" name="threadId" value="${item.threadId}">
+                <button type="submit" class="btn btn-green" style="font-size:12px; padding:5px 10px;">✅ False Positive</button>
+              </form>
+              <form action="${GAS_URL}" method="POST" style="display:inline;">
+                <input type="hidden" name="token" value="${token}">
+                <input type="hidden" name="type" value="discord_action">
+                <input type="hidden" name="action" value="verify_scam">
+                <input type="hidden" name="threadId" value="${item.threadId}">
+                <button type="submit" class="btn btn-red" style="font-size:12px; padding:5px 10px;">🚨 Verify Scam</button>
+              </form>
+            </div>
+          `).join("");
+        } catch (err) {
+          box.innerHTML = `<h2>❌ Error</h2><p>${err.message}</p>`;
         }
-
-        if (data.status === "ok") {
-          const isScam = action === "verify_scam";
-          document.getElementById("statusIcon").textContent = isScam ? "🚨" : "✅";
-          document.getElementById("statusTitle").textContent = isScam ? "Verified as Scam" : "Marked as False Positive";
-          document.getElementById("statusMsg").innerHTML = data.message || "Action processed successfully. You can close this window and return to Discord.";
-        } else {
-          document.getElementById("statusIcon").textContent = "❌";
-          document.getElementById("statusTitle").textContent = "Execution Failed";
-          document.getElementById("statusMsg").textContent = data.message || "Unknown backend error.";
-        }
-      } catch (err) {
-        document.getElementById("statusIcon").textContent = "❌";
-        document.getElementById("statusTitle").textContent = "Connection Failed";
-        document.getElementById("statusMsg").textContent = err.message;
+        return;
       }
+
+      // For False Positive / Verify Scam single actions: use a 100% CORS-proof Auto-Submitting Form!
+      box.innerHTML = `
+        <h2>Processing Action...</h2>
+        <p>Please wait while we update your Gmail and Audit Log.</p>
+        <form id="actionForm" action="${GAS_URL}" method="POST">
+          <input type="hidden" name="token" value="${token}">
+          <input type="hidden" name="type" value="discord_action">
+          <input type="hidden" name="action" value="${action}">
+          <input type="hidden" name="threadId" value="${threadId}">
+        </form>
+      `;
+      document.getElementById("actionForm").submit();
     }
 
-    executeDiscordAction();
+    handleAction();
   </script>
 </body>
 </html>
