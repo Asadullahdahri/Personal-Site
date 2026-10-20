@@ -46,7 +46,7 @@
     <div id="resultOutput" class="result-box" style="display:none;"></div>
   </div>
 
-  <script>
+<script>
     // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE:
     const GAS_URL = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_DEPLOYMENT_ID/exec";
     const SECRET = "YOUR_ADMIN_SECRET"; // Matches ADMIN_SECRET in Apps Script properties
@@ -74,12 +74,14 @@
       out.textContent = "⏳ Analyzing threat via Gemini AI...";
 
       try {
+        const payload = { token: SECRET, type: type, content: content };
+        
+        // Fetch request posting JSON directly to the Apps Script web app endpoint
         const res = await fetch(GAS_URL, {
           method: "POST",
-          credentials: "omit",
-          headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight issues with Apps Script
-          body: JSON.stringify({ token: SECRET, type: type, content: content })
+          body: JSON.stringify(payload)
         });
+        
         const data = await res.json();
         if (data.status !== "ok") {
           out.textContent = "❌ Error: " + (data.message || "Unknown error");
