@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CalmGuard Action Relay</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 40px 20px; text-align: center; }
+    .card { background: white; padding: 30px; border-radius: 10px; max-width: 450px; margin: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    h2 { margin-top: 0; }
+    .btn { display: inline-block; margin-top: 20px; background: #2C3E50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="statusIcon">⏳</div>
+    <h2 id="statusTitle">Processing Action...</h2>
+    <p id="statusMsg" style="color: #555; line-height: 1.5;">Please wait while CalmGuard securely updates your inbox and audit log.</p>
+    <a href="sandbox.html" class="btn" style="display:none;" id="backBtn">Go to Sandbox</a>
+  </div>
+
+  <script>
+    // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE:
+    const GAS_URL = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_DEPLOYMENT_ID/exec";
+
+    async function executeDiscordAction() {
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get("action");
+      const threadId = params.get("threadId");
+
+      let secret = localStorage.getItem("calmguard_admin_token");
+      if (!secret) {
+        secret = prompt("🔒 Enter your CalmGuard ADMIN_SECRET to authorize this action:");
+        if (secret) {
+          localStorage.setItem("calmguard_admin_token", secret.trim());
+        } else {
+          document.getElementById("statusIcon").textContent = "🔒";
+          document.getElementById("statusTitle").textContent = "Unauthorized";
+          document.getElementById("statusMsg").textContent = "Security token is required to execute security actions.";
+          return;
+        }
+      }
+
+      if (!action || !threadId) {
+        document.getElementById("statusIcon").textContent = "❌";
+        document.getElementById("statusTitle").textContent = "Invalid Request";
+        document.getElementById("statusMsg").textContent = "Missing action parameters.";
+        return;
+      }
+
+      try {
+        const payload = {
+          token: secret.trim(),
+          type: "discord_action",
+          action: action,
+          threadId: threadId
+        };
+
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.status === "unauthorized") {
+          localStorage.removeItem("calmguard_admin_token");
+          alert("Invalid Admin Secret. Please reload and re-enter.");
+          return;
+        }
+
+        if (data.status === "ok") {
+          const isScam = action === "verify_scam";
+          document.getElementById("statusIcon").textContent = isScam ? "🚨" : "✅";
+          document.getElementById("statusTitle").textContent = isScam ? "Verified as Scam" : "Marked as False Positive";
+          document.getElementById("statusMsg").innerHTML = data.message || "Action processed successfully. You can close this window and return to Discord.";
+        } else {
+          document.getElementById("statusIcon").textContent = "❌";
+          document.getElementById("statusTitle").textContent = "Execution Failed";
+          document.getElementById("statusMsg").textContent = data.message || "Unknown backend error.";
+        }
+      } catch (err) {
+        document.getElementById("statusIcon").textContent = "❌";
+        document.getElementById("statusTitle").textContent = "Connection Failed";
+        document.getElementById("statusMsg").textContent = err.message;
+      }
+    }
+
+    executeDiscordAction();
+  </script>
+</body>
+</html>
