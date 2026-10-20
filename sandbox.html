@@ -47,9 +47,20 @@
   </div>
 
 <script>
-    // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE:
+    // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE (This URL is safe to be public if protected by your secret):
     const GAS_URL = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_DEPLOYMENT_ID/exec";
-    const SECRET = "YOUR_ADMIN_SECRET"; // Matches ADMIN_SECRET in Apps Script properties
+
+    // Helper to get or ask for the secret token securely
+    function getAdminSecret() {
+      let secret = localStorage.getItem("calmguard_admin_token");
+      if (!secret) {
+        secret = prompt("🔒 Enter your CalmGuard ADMIN_SECRET (saved securely in your browser):");
+        if (secret) {
+          localStorage.setItem("calmguard_admin_token", secret.trim());
+        }
+      }
+      return secret ? secret.trim() : "";
+    }
 
     function switchTab(tabName) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -69,20 +80,32 @@
         alert("Please enter content to analyze.");
         return;
       }
+
+      const secret = getAdminSecret();
+      if (!secret) {
+        alert("Security token is required to run analysis.");
+        return;
+      }
+
       const out = document.getElementById('resultOutput');
       out.style.display = 'block';
       out.textContent = "⏳ Analyzing threat via Gemini AI...";
 
       try {
-        const payload = { token: SECRET, type: type, content: content };
+        const payload = { token: secret, type: type, content: content };
         
-        // Fetch request posting JSON directly to the Apps Script web app endpoint
         const res = await fetch(GAS_URL, {
           method: "POST",
           body: JSON.stringify(payload)
         });
         
         const data = await res.json();
+        if (data.status === "unauthorized") {
+          localStorage.removeItem("calmguard_admin_token"); // Clear bad token
+          out.textContent = "❌ Error: Invalid Admin Secret. Refresh page to try again.";
+          return;
+        }
+
         if (data.status !== "ok") {
           out.textContent = "❌ Error: " + (data.message || "Unknown error");
           return;
