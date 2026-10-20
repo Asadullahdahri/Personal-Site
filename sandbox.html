@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CalmGuard AI - Testing Sandbox</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    h2 { color: #2C3E50; margin-top: 0; }
+    .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+    .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #7f8c8d; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .tab.active { color: #3498DB; border-bottom: 2px solid #3498DB; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    textarea { width: 100%; height: 120px; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; font-size: 14px; margin-bottom: 12px; }
+    button { background: #3498DB; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #2980B9; }
+    .result-box { margin-top: 20px; background: #fafafa; border: 1px solid #e1e8ed; padding: 15px; border-radius: 6px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🛡️ CalmGuard AI Testing Sandbox</h2>
+    <p style="color: #666; font-size: 13px;">Test suspicious emails or SMS notices safely. Logs are saved to your sandbox sheet tab.</p>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('email')">📧 Email Triage</div>
+      <div class="tab" onclick="switchTab('sms')">📱 SMS / Notice Triage</div>
+    </div>
+
+    <!-- Email Tab -->
+    <div id="email-tab" class="tab-content active">
+      <textarea id="emailInput" placeholder="Paste email body or suspicious notice here..."></textarea>
+      <br>
+      <button onclick="runAnalysis('email', document.getElementById('emailInput').value)">Analyze Email</button>
+    </div>
+
+    <!-- SMS Tab -->
+    <div id="sms-tab" class="tab-content">
+      <textarea id="smsInput" placeholder="Paste SMS text message or flyer transcription here..."></textarea>
+      <br>
+      <button onclick="runAnalysis('sms', document.getElementById('smsInput').value)">Analyze SMS / Notice</button>
+    </div>
+
+    <div id="resultOutput" class="result-box" style="display:none;"></div>
+  </div>
+
+  <script>
+    // PASTE YOUR GOOGLE APPS SCRIPT /exec URL HERE:
+    const GAS_URL = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_DEPLOYMENT_ID/exec";
+    const SECRET = "YOUR_ADMIN_SECRET"; // Matches ADMIN_SECRET in Apps Script properties
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      if (tabName === 'email') {
+        document.querySelectorAll('.tab')[0].classList.add('active');
+        document.getElementById('email-tab').classList.add('active');
+      } else {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('sms-tab').classList.add('active');
+      }
+      document.getElementById('resultOutput').style.display = 'none';
+    }
+
+    async function runAnalysis(type, content) {
+      if (!content.trim()) {
+        alert("Please enter content to analyze.");
+        return;
+      }
+      const out = document.getElementById('resultOutput');
+      out.style.display = 'block';
+      out.textContent = "⏳ Analyzing threat via Gemini AI...";
+
+      try {
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          credentials: "omit",
+          headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight issues with Apps Script
+          body: JSON.stringify({ token: SECRET, type: type, content: content })
+        });
+        const data = await res.json();
+        if (data.status !== "ok") {
+          out.textContent = "❌ Error: " + (data.message || "Unknown error");
+          return;
+        }
+
+        const a = data.analysis;
+        out.innerHTML = `<b>Verdict:</b> ${a.summary_title || "Assessment Complete"}<br>` +
+                        `<b>Threat Level:</b> ${a.threat_level} | <b>Confidence:</b> ${a.confidence_score}%<br>` +
+                        `<b>Phishing Category:</b> ${a.phishing_type}<br><br>` +
+                        `<b>🚩 Detected Tactics:</b><br>${(a.detected_tactics || []).map(t => "• " + t).join("<br>")}<br><br>` +
+                        `<b>⚖️ Uncertainty:</b> ${a.uncertainty_analysis}`;
+      } catch (err) {
+        out.textContent = "❌ Connection failed: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
