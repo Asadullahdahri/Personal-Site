@@ -125,12 +125,7 @@ $(function() {
     if (!$target.length) {
       closeNavigation(function() {
         if (targetSelector === '#contact') {
-          var $contactInfo = $('.contact');
-          if ($contactInfo.length) {
-            $('html, body').animate({
-              scrollTop: $contactInfo.offset().top - 100
-            }, 600);
-          }
+          window.location.href = 'mailto:contact@asadullahdahri.com';
         }
       });
       return;
