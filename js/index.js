@@ -137,11 +137,18 @@ $(function() {
         gsap.to('#breaker', 0, { display: "block" });
         gsap.to('#breaker-two', 0, { display: "block", delay: 0.1 });
         gsap.to('#header, #about, #services, #portfolio, #blog, #contact', 0, { display: "none" });
-        gsap.to(targetSelector, 0, { display: "block", delay: 0.7 });
+        gsap.to(targetSelector, 0, {
+          display: "block",
+          delay: 0.7,
+          onComplete: function() {
+            window.scrollTo(0, 0);
+          }
+        });
         gsap.to('#breaker', 0, { display: "none", delay: 1.5 });
         gsap.to('#breaker-two', 0, { display: "none", delay: 1.5 });
       } else {
         $('#header, #about, #services, #portfolio, #blog, #contact').hide();
+        window.scrollTo(0, 0);
         $target.fadeIn(400);
       }
     });
